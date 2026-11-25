@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Tell a Whole Story in 32 Characters — entry program.
 
-Writes one Wi-Fi network name (<= 32 chars) to entry.txt next to this
-file, and also to /output/entry.txt when that sandbox output directory
-is available (the grader's gate reads /output/entry.txt).
+Writes one Wi-Fi network name (<= 32 chars) to /output/entry.txt ONLY.
+The grade sandbox mounts the repo read-only and provides /output as
+the writable directory; the gate reads /output/entry.txt. Writing
+beside __file__ fails there (the open raises, the program exits 1,
+run_completes fails), so this program never writes anywhere else.
 
 Entry: "She took the dog AND the WiFi" (29 chars)
 Story: a breakup told in one line — she walked out with the dog, and
@@ -18,47 +20,24 @@ import sys
 # The entry: one Wi-Fi network name, 29 characters, no trailing newline.
 ENTRY = "She took the dog AND the WiFi"
 
+MAX_CHARS = 32
+
+# The grade sandbox's writable directory; the gate reads this file.
+OUTPUT_DIR = "/output"
+OUTPUT_PATH = os.path.join(OUTPUT_DIR, "entry.txt")
+
+
 def _write(path, text):
     """Write text as UTF-8 with no trailing newline, deterministically."""
     with open(path, "w", encoding="utf-8", newline="") as fh:
         fh.write(text)
 
 
-def _output_paths():
-    """entry.txt beside this file, plus the grader's /output/entry.txt.
-
-    The shared local /output is only touched when it does not already
-    hold somebody else's entry: if /output/entry.txt exists with
-    different bytes, leave it alone (another builder is using it).
-    In the grader sandbox /output is private to this run, so the
-    write lands there as the gate expects.
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    paths = [os.path.join(here, "entry.txt")]
-    shared = "/output/entry.txt"
-    try:
-        if os.path.isdir("/output"):
-            if not os.path.exists(shared):
-                paths.append(shared)
-            else:
-                with open(shared, "rb") as fh:
-                    if fh.read() == ENTRY.encode("utf-8"):
-                        paths.append(shared)
-    except OSError:
-        pass
-    return paths
-
-
 def write_entry():
-    """Write the entry to every output path; return the paths written."""
-    written = []
-    for path in _output_paths():
-        _write(path, ENTRY)
-        written.append(path)
-    return written
-
-
-MAX_CHARS = 32
+    """Create /output if needed, then write the entry there; return path."""
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    _write(OUTPUT_PATH, ENTRY)
+    return OUTPUT_PATH
 
 
 def validate(text):
@@ -78,11 +57,10 @@ def main():
         print("entry fails the gate: %r (%d chars)" % (ENTRY, len(ENTRY)),
               file=sys.stderr)
         return 1
-    written = write_entry()
+    path = write_entry()
     print("entry: %s" % ENTRY)
     print("chars: %d" % len(ENTRY))
-    for path in written:
-        print("wrote: %s" % path)
+    print("wrote: %s" % path)
     return 0
 
 
